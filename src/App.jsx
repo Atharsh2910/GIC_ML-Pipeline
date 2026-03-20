@@ -25,7 +25,7 @@ const PARTNERS = {
     deliveries: 312, rating: 4.7,
     chosenPlan: "premium",
     isNewCustomer: true,
-    pastWeeklyEarnings: [8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000],
+    pastWeeklyEarnings: [8200, 7900, 8400, 7600, 8300, 7900, 8100, 8200, 7700, 7700],
     pastWeeklyPaid:     [null, null, null, null, null, null, null, null, null, null],
     pastWeeklyClaimed:  [false, false, false, false, false, false, false, false, false, false],
     currentWeekDays: [
@@ -44,10 +44,10 @@ const PARTNERS = {
     phone: "+91 94440 67890", bankId: "SBI009944401",
     deliveries: 2876, rating: 4.5,
     chosenPlan: "premium",
-    pastWeeklyEarnings: [8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000],
+    pastWeeklyEarnings: [8200, 9800, 8200, 5600, 8200, 8200, 9800, 8200, 5600, 8200],
     // exactly 6 defaults out of 10 weeks
     pastWeeklyPaid:     [false, true, false, true, false, false, true, false, true, false],
-    pastWeeklyClaimed:  [false, false, false, true, false, false, false, true, false, false],
+    pastWeeklyClaimed:  [false, false, false, true, false, false, false, false, true, false],
     currentWeekDays: [
       { day:"Mon", date:"09 Jun", earning:900,  rainfallCm:5,  disrupted:false },
       { day:"Tue", date:"10 Jun", earning:750,  rainfallCm:7,  disrupted:false },
@@ -64,7 +64,7 @@ const PARTNERS = {
     phone: "+91 90000 34567", bankId: "ICICI0078234",
     deliveries: 1956, rating: 4.9,
     chosenPlan: "premium",
-    pastWeeklyEarnings: [8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000, 8000],
+    pastWeeklyEarnings: [8300, 8100, 8400, 8200, 8300, 8400, 8200, 5500, 8300, 8300],
     pastWeeklyPaid:     [true, true, true, true, true, true, true, true, true, true],
     pastWeeklyClaimed:  [false, false, false, false, false, false, false, true, false, false],
     currentWeekDays: [
@@ -170,16 +170,19 @@ function computePricing(partner) {
   // Eg2: 1320 × 0.80 × 1.00 = ₹1,056 ✓
   // Eg3: 1695 × 0.80 × 1.00 = ₹1,356 ✓
 
-  const nextAvg     = Math.round([...partner.pastWeeklyEarnings.slice(1), currentEarning].reduce((a,b)=>a+b,0)/10);
-  const nextTier    = getTier(partner.chosenPlan);
-  const nextPremium = Math.round(nextAvg * tier.rate) + defaultPenaltyAmt - loyaltyRewardAmt;
+  const nextAvg          = Math.round([...partner.pastWeeklyEarnings.slice(1), currentEarning].reduce((a,b)=>a+b,0)/10);
+  const nextTier         = getTier(partner.chosenPlan);
+  const nextBasePremium  = Math.round(nextAvg * BASE_RATE);
+  const nextPlanPremium  = Math.round(nextAvg * tier.rate);
+  const nextLoyaltyAmt   = isNonDefaulter ? Math.round(nextBasePremium * 0.13125) : 0;
+  const nextPremium      = nextPlanPremium + defaultPenaltyAmt - nextLoyaltyAmt;
 
   return {
     avg, defaults, claims, tier,
     basePremium, planPremium, defaultPenaltyAmt, loyaltyRewardAmt,
     adjCoverPct, weeklyPremium, threshold, currentEarning,
     disruptedDays, loss, payout, claimTriggered,
-    nextAvg, nextTier, nextPremium,
+    nextAvg, nextTier, nextPremium, nextPlanPremium, nextLoyaltyAmt,
     maxRainfall, rainCovPct, netCoverableLoss,
     defaultFinePct, loyaltyCoveragePct, isNonDefaulter, isNewCustomer,
   };
@@ -494,16 +497,18 @@ function PlanSelector({ partnerId, onBack, onPay }) {
         </div>
       </div>
 
-      {/* ── How Your Premium Is Calculated ── */}
+      {/* ── How Your Premium Is Calculated (Next Week) ── */}
       <div style={{maxWidth:940,margin:"0 auto 32px",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:16,padding:"26px 28px"}}>
-        <div style={{fontSize:17,fontWeight:700,color:"var(--purple-dark)",letterSpacing:-0.3,marginBottom:4}}>How Your Premium Is Calculated</div>
-        <div style={{fontSize:13,color:"var(--muted)",marginBottom:20}}>Based on your 10-week rolling average and payment history</div>
+        <div style={{fontSize:17,fontWeight:700,color:"var(--purple-dark)",letterSpacing:-0.3,marginBottom:4}}>Next Week's Premium — How It's Calculated</div>
+        <div style={{fontSize:13,color:"var(--muted)",marginBottom:20}}>
+          Updated rolling avg after this week's earning of {fmt(pricing.currentEarning)} (16–22 Jun 2025)
+        </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
           {[
-            { Icon:BarChart2,   label:"10-Wk Rolling Avg",   val:fmt(pricing.avg),                                                sub:"Your income baseline",          red:false },
-            { Icon:Percent,     label:`${pricing.tier.tabLabel} Rate (${(pricing.tier.rate*100).toFixed(1)}%)`, val:fmt(pricing.planPremium),                                        sub:"Base weekly premium",            red:false },
-            { Icon:AlertCircle, label:"Default Penalty",      val:pricing.defaults>0?"+"+fmt(pricing.defaultPenaltyAmt):"None",   sub:pricing.defaults+" missed payment(s)", red:pricing.defaults>0 },
-            { Icon:Target,      label:"Disruption Threshold", val:fmt(pricing.threshold),                                          sub:"75% of rolling avg",            red:false },
+            { Icon:BarChart2,   label:"Updated Rolling Avg",  val:fmt(pricing.nextAvg),                                             sub:"Avg after this week",          red:false },
+            { Icon:Percent,     label:`${pricing.tier.tabLabel} Rate (${(pricing.tier.rate*100).toFixed(1)}%)`, val:fmt(pricing.nextPlanPremium),                          sub:"Next week base premium",        red:false },
+            { Icon:AlertCircle, label:"Default Penalty",       val:pricing.defaults>0?"+"+fmt(pricing.defaultPenaltyAmt):"None",    sub:pricing.defaults+" missed payment(s)", red:pricing.defaults>0 },
+            { Icon:Target,      label:"Disruption Threshold",  val:fmt(Math.round(pricing.nextAvg*0.75)),                            sub:"75% of updated avg",           red:false },
           ].map(({ Icon:Ic, label, val, sub, red }) => (
             <div key={label} style={{borderRadius:12,padding:"16px",background:red?"var(--red-bg)":"var(--surface2)",border:"1px solid "+(red?"var(--red-bdr)":"var(--border)"),textAlign:"center"}}>
               <Ic size={15} color={red?"var(--red)":"var(--purple-lt)"} style={{marginBottom:8}} />
@@ -515,27 +520,27 @@ function PlanSelector({ partnerId, onBack, onPay }) {
         </div>
         {pricing.defaults > 0 && (
           <div style={{background:"var(--red-bg)",border:"1px solid var(--red-bdr)",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:13,color:"var(--red)",display:"flex",alignItems:"center",gap:8}}>
-            <AlertTriangle size={14} /> Your premium includes a +{fmt(pricing.defaultPenaltyAmt)} penalty for {pricing.defaults} missed payment(s). Pay consistently to reduce this.
+            <AlertTriangle size={14} /> Next week's premium includes a +{fmt(pricing.defaultPenaltyAmt)} penalty for {pricing.defaults} missed payment(s).
           </div>
         )}
-        {pricing.loyaltyRewardAmt > 0 && (
+        {pricing.nextLoyaltyAmt > 0 && (
           <div style={{background:"var(--green-bg)",border:"1px solid var(--green-bdr)",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:13,color:"var(--green)",display:"flex",alignItems:"center",gap:8}}>
-            <CheckCircle size={14} /> Loyalty reward: −{fmt(pricing.loyaltyRewardAmt)} applied on your premium for 52-week clean payment record!
+            <CheckCircle size={14} /> Loyalty reward: −{fmt(pricing.nextLoyaltyAmt)} applied for 52-week clean payment record!
           </div>
         )}
         <div style={{background:"linear-gradient(135deg,#3B0764,#5B21B6)",borderRadius:14,padding:"18px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:16}}>
           <div>
-            <div style={{fontSize:11,color:"#C4A8E0",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>This Week's Premium Due</div>
+            <div style={{fontSize:11,color:"#C4A8E0",letterSpacing:1,textTransform:"uppercase",marginBottom:5}}>Next Week's Premium Due · 16–22 Jun 2025</div>
             <div style={{fontSize:13,color:"rgba(250,248,255,0.78)"}}>
-              Slab 3: {(pricing.tier.rate*100).toFixed(1)}% × {fmt(pricing.avg)} = {fmt(pricing.planPremium)}
+              Slab 3: {(pricing.tier.rate*100).toFixed(1)}% × {fmt(pricing.nextAvg)} = {fmt(pricing.nextPlanPremium)}
               {pricing.defaultPenaltyAmt > 0 && ` + ${fmt(pricing.defaultPenaltyAmt)} default penalty`}
-              {pricing.loyaltyRewardAmt  > 0 && ` − ${fmt(pricing.loyaltyRewardAmt)} loyalty reward`}
+              {pricing.nextLoyaltyAmt    > 0 && ` − ${fmt(pricing.nextLoyaltyAmt)} loyalty reward`}
             </div>
             <div style={{fontSize:11,color:"#C4A8E0",marginTop:3}}>Coverage: {(pricing.adjCoverPct*100).toFixed(0)}% of verified income loss</div>
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:11,color:"#C4A8E0",marginBottom:2}}>Net Weekly Premium</div>
-            <div style={{fontSize:32,fontWeight:700,color:"#FAF8FF",fontFamily:"var(--mono)",letterSpacing:-1}}>{fmt(pricing.weeklyPremium)}</div>
+            <div style={{fontSize:32,fontWeight:700,color:"#FAF8FF",fontFamily:"var(--mono)",letterSpacing:-1}}>{fmt(pricing.nextPremium)}</div>
           </div>
         </div>
       </div>
@@ -543,7 +548,9 @@ function PlanSelector({ partnerId, onBack, onPay }) {
       <div className="plan-grid">
         {planMeta.map(({ key, Icon }) => {
           const t = TIERS[key];
-          const premium  = Math.round(pricing.avg * t.rate) + pricing.defaultPenaltyAmt - pricing.loyaltyRewardAmt;
+          // Plan cards show next week's premium (updated rolling avg after this week's lower earning)
+          const nextLoyalty = pricing.isNonDefaulter ? Math.round(Math.round(pricing.nextAvg * 0.04) * 0.13125) : 0;
+          const premium  = Math.round(pricing.nextAvg * t.rate) + pricing.defaultPenaltyAmt - nextLoyalty;
           const isSelected = selected === key;
           const isCurrent  = pricing.tier.key === key;
           const tabClass   = isCurrent ? "plan-tab tab-current" : isSelected ? "plan-tab tab-active" : "plan-tab";
@@ -597,7 +604,7 @@ function PaymentPage({ partnerId, planKey, onBack, onSuccess }) {
   const partner = PARTNERS[partnerId];
   const pricing = useMemo(() => computePricing(partner), [partner]);
   const tier    = TIERS[planKey];
-  const premium = Math.round(pricing.nextAvg * tier.rate) + pricing.defaultPenaltyAmt - pricing.loyaltyRewardAmt;
+  const premium = pricing.nextPremium;
   const [method, setMethod] = useState("UPI");
   const [loading, setLoading] = useState(false);
 
@@ -656,7 +663,7 @@ function PaymentSuccess({ partnerId, planKey, onDone }) {
   const partner = PARTNERS[partnerId];
   const pricing = useMemo(() => computePricing(partner), [partner]);
   const tier    = TIERS[planKey];
-  const premium = Math.round(pricing.nextAvg * tier.rate) + pricing.defaultPenaltyAmt - pricing.loyaltyRewardAmt;
+  const premium = pricing.nextPremium;
   return (
     <div className="center-pg">
       <div className="pay-card" style={{textAlign:"center",maxWidth:400}}>
