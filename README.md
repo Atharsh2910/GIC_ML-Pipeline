@@ -1,5 +1,29 @@
 # GigShield - An Autonomous Parametric Income Insurance for Gig Workers
 
+--- 
+
+## Table of Contents
+* [1. Project Aim](#1-project-aim)
+* [2. Target Market](#2-target-market)
+* [3. Business & Operational Strategy](#3-business--operational-strategy)
+* [4. Benefits to Society](#4-benefits-to-society)
+* [5. Categorization of Parametric Disruptions](#5-categorization-of-parametric-disruptions)
+* [6. Business Architecture & Data Integration Pipeline](#6-business-architecture--data-integration-pipeline)
+* [7. Eligibility Criteria & Onboarding Validation](#7-eligibility-criteria--onboarding-validation)
+* [8. Dynamic Pricing Architecture & Insurance Slabs](#8-dynamic-pricing-architecture--insurance-slabs)
+* [9. Predictive Premium Calculation & Actuarial Variables](#9-predictive-premium-calculation--actuarial-variables)
+* [10. Rewards, Penalties, & Anti-Exploitation Protocols](#10-rewards-penalties--anti-exploitation-protocols)
+* [11. Autonomous Insurance Roll-out & The 75% Income Threshold](#11-autonomous-insurance-roll-out--the-75-income-threshold)
+* [12. Parametric Disruption Thresholds](#12-parametric-disruption-thresholds)
+* [13. Calculated Payout Scenarios (Case Studies)](#13-calculated-payout-scenarios-case-studies)
+* [14. Fraud Detection & Risk Mitigation Mechanisms](#14-fraud-detection--risk-mitigation-mechanisms)
+* [15. Predictive Modeling & Explainable AI (XAI)](#15-predictive-modeling--explainable-ai-xai)
+* [16. Autonomous Multi-Agent AI System Architecture](#16-autonomous-multi-agent-ai-system-architecture)
+* [17. End-To-End Workflow](#17-end-to-end-workflow)
+* [18. MARKET CRASH: Adversarial Defense & Anti-Spoofing Strategy](#18-market-crash-adversarial-defense--anti-spoofing-strategy)
+
+---
+
 Prototype Demo: [https://youtu.be/hLz2ZEhvils](https://youtu.be/hLz2ZEhvils)
 
 Solution explanation + Financial model + Technical architecture: [https://youtu.be/8LG6JR4Q7rM](https://youtu.be/8LG6JR4Q7rM)
