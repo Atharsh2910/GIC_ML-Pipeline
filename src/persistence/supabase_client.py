@@ -127,7 +127,7 @@ def log_rag_query_any(trace_id: str, query_type: str, snippet: str) -> None:
 def bulk_upsert_workers(rows: List[Dict[str, Any]], batch_size: int = 250) -> int:
     """
     Upsert worker snapshots into gigshield_workers. Each row: {"worker_id": int, "record": dict}.
-    Requires migration 002 and TABLE_WORKERS.
+    Requires migration 002 (supabase/migrations/002_gigshield_workers.sql) applied in the Supabase SQL Editor.
     """
     if not rows:
         return 0
@@ -135,6 +135,17 @@ def bulk_upsert_workers(rows: List[Dict[str, Any]], batch_size: int = 250) -> in
     total = 0
     for i in range(0, len(rows), batch_size):
         chunk = rows[i : i + batch_size]
-        sb.table(TABLE_WORKERS).upsert(chunk, on_conflict="worker_id").execute()
+        try:
+            sb.table(TABLE_WORKERS).upsert(chunk, on_conflict="worker_id").execute()
+        except Exception as e:
+            err = getattr(e, "args", None)
+            msg = str(err[0]) if err else str(e)
+            if "PGRST205" in msg or "gigshield_workers" in msg.lower():
+                raise RuntimeError(
+                    f"Table public.{TABLE_WORKERS} is missing. In Supabase → SQL Editor, run the file "
+                    f"supabase/migrations/002_gigshield_workers.sql (and 001 if you have not). "
+                    f"Then retry. Original error: {e}"
+                ) from e
+            raise
         total += len(chunk)
     return total
