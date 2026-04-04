@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 1. Path Setup & Environment
@@ -72,6 +73,14 @@ app = FastAPI(
     description="Backend endpoints mapping the RAG + MCP Multi-Agent System architecture via LangGraph.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
