@@ -38,10 +38,10 @@ class FraudDetectionModel:
     def preprocess_features(self, df: pd.DataFrame, fit: bool = False) -> pd.DataFrame:
         """Preprocess features"""
         df = df.copy()
-        
+
         # Encode categorical features
         categorical_cols = df.select_dtypes(include=['object']).columns
-        
+
         for col in categorical_cols:
             if col in df.columns:
                 if fit:
@@ -49,11 +49,17 @@ class FraudDetectionModel:
                     df[col] = self.label_encoders[col].fit_transform(df[col].astype(str))
                 else:
                     if col in self.label_encoders:
-                        df[col] = self.label_encoders[col].transform(df[col].astype(str))
-        
+                        le = self.label_encoders[col]
+                        known = set(le.classes_)
+                        # Map unseen labels to first known class to avoid crash
+                        df[col] = df[col].astype(str).apply(
+                            lambda x: x if x in known else le.classes_[0]
+                        )
+                        df[col] = le.transform(df[col])
+
         # Fill missing values
         df = df.fillna(0)
-        
+
         return df
     
     def prepare_data(self, df: pd.DataFrame, fit: bool = False) -> pd.DataFrame:

@@ -172,6 +172,10 @@ PREMIUM_PREDICTION_CONFIG = {
         'Slab 1 (50%)': 0.90,
         'Slab 2 (75%)': 1.00,
         'Slab 3 (100%)': 1.20,
+        # Actual dataset slab names
+        'Slab_50': 0.90,
+        'Slab_75': 1.00,
+        'Slab_100': 1.20,
     },
     'consistency_reward': {
         'weeks_required': 4,
@@ -224,6 +228,10 @@ PAYOUT_OPTIMIZATION_CONFIG = {
         'Slab 1 (50%)': 0.5,
         'Slab 2 (75%)': 0.75,
         'Slab 3 (100%)': 1.0,
+        # Actual dataset slab names
+        'Slab_50': 0.5,
+        'Slab_75': 0.75,
+        'Slab_100': 1.0,
     },
     'loyalty_bonus_rate': 0.005,  # 0.5% per 4 weeks
     'max_loyalty_bonus': 0.20,    # Maximum 20%

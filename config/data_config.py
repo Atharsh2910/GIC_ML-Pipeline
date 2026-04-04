@@ -253,7 +253,7 @@ VALIDATION_RULES = {
 # Encoding Mappings
 CATEGORICAL_ENCODINGS = {
     'employment_type': ['Full-Time', 'Part-Time', 'Occasional', 'full_time', 'part_time'],
-    'selected_slab': ['Basic', 'Standard', 'Premium', 'Elite', 'Slab 1 (50%)', 'Slab 2 (75%)', 'Slab 3 (100%)'],
+    'selected_slab': ['Basic', 'Standard', 'Premium', 'Elite', 'Slab 1 (50%)', 'Slab 2 (75%)', 'Slab 3 (100%)', 'Slab_50', 'Slab_75', 'Slab_100'],
     'disruption_type': [
         'none', 'Heavy_Rain', 'Extreme_Heat', 'Cyclone', 'Flood', 'Infrastructure',
         'rainfall', 'heat', 'cold', 'cyclone', 'strike', 'curfew',
