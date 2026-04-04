@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Routers
-from src.api.routers import claims, workers
+from src.api.routers import claims, workers, predict
 from mock_api.mock_api import router as mock_router
 
 app = FastAPI(
@@ -32,6 +32,7 @@ app.add_middleware(
 # Include modules
 app.include_router(claims.router, prefix="/api/v1")
 app.include_router(workers.router, prefix="/api/v1")
+app.include_router(predict.router, prefix="/api/v1")
 
 # Include the mock API router directly
 app.include_router(mock_router)

@@ -42,7 +42,7 @@ def get_orchestrator() -> GigShieldOrchestrator:
         }
         
         # Load models safely (they might not exist if not trained, but InferencePipeline handles it)
-        inference = InferencePipeline(model_paths)
+        inference = get_inference_pipeline()
         
         # Vector Store
         vector_store = VectorStore()
@@ -53,3 +53,20 @@ def get_orchestrator() -> GigShieldOrchestrator:
             vector_store=vector_store
         )
     return _ORCHESTRATOR
+
+_INFERENCE_PIPELINE: Optional[InferencePipeline] = None
+
+def get_inference_pipeline() -> InferencePipeline:
+    global _INFERENCE_PIPELINE
+    if _INFERENCE_PIPELINE is None:
+        model_dir = os.getenv("GIGSHIELD_MODEL_DIR", "models")
+        model_paths = {
+            "income_forecasting": f"{model_dir}/income_forecasting",
+            "risk_scoring": f"{model_dir}/risk_scoring",
+            "fraud_detection": f"{model_dir}/fraud_detection",
+            "disruption_impact": f"{model_dir}/disruption_impact",
+            "behavior_analysis": f"{model_dir}/behavior_analysis",
+            "premium_prediction": f"{model_dir}/premium_prediction",
+        }
+        _INFERENCE_PIPELINE = InferencePipeline(model_paths)
+    return _INFERENCE_PIPELINE
