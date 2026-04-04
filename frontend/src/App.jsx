@@ -282,31 +282,32 @@ function LoginPage({ onLogin, onRegister }) {
     const slabToPlan = { "Slab_100": "premium", "Slab_75": "standard", "Slab_50": "standard", "Slab_25": "basic" };
     const chosenPlan = slabToPlan[dbRecord.selected_slab] || "premium";
 
-    // Binomial Distribution Logic
+    // Randomized "Noise" Distribution Logic
     const shortDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const daysArr = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const currentDayName = worker.current_day || "Monday";
     const currentDayIdx = daysArr.indexOf(currentDayName);
-    
     const totalToDistribute = dbRecord.weekly_income || 0;
     
-    // Binomial coefficient helper: nCk
-    const nCr = (n, r) => {
-      if (r < 0 || r > n) return 0;
-      if (r === 0 || r === n) return 1;
-      let res = 1;
-      for (let i = 1; i <= r; i++) res = res * (n - i + 1) / i;
-      return res;
-    };
+    // Calculate base average and a random fluctuation (noise)
+    const activeDaysCount = currentDayIdx + 1;
+    const avg = totalToDistribute / activeDaysCount;
+    const noiseLevel = avg * 0.15; // 15% fluctuation for realism
+    
+    const distributedEarnings = [];
+    let currentSum = 0;
 
-    // Calculate weights for all active days (0 to currentDayIdx)
-    // We use B(n, k) where n = currentDayIdx
-    const weights = [];
-    let totalWeight = 0;
     for (let i = 0; i <= currentDayIdx; i++) {
-        const w = nCr(currentDayIdx, i);
-        weights.push(w);
-        totalWeight += w;
+      if (i === currentDayIdx) {
+        // Last day gets the remainder to ensure exact total
+        distributedEarnings.push(totalToDistribute - currentSum);
+      } else {
+        // Random value within ±noiseLevel of average
+        const noise = (Math.random() * 2 - 1) * noiseLevel;
+        const val = Math.max(0, avg + noise);
+        distributedEarnings.push(val);
+        currentSum += val;
+      }
     }
 
     const currentWeekDays = shortDays.map((short, idx) => {
@@ -315,9 +316,7 @@ function LoginPage({ onLogin, onRegister }) {
       let isDisrupted = false;
 
       if (idx <= currentDayIdx) {
-        // Active or Past day
-        const weight = weights[idx];
-        earning = (weight / totalWeight) * totalToDistribute;
+        earning = distributedEarnings[idx];
         dateLabel = (idx === currentDayIdx) ? "Today" : "Past";
         if (idx === currentDayIdx) isDisrupted = (dbRecord.rainfall_cm || 0) > 10;
       }
