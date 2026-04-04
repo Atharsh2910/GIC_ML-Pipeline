@@ -85,12 +85,33 @@ class BaseAgent:
 
 
 class MonitorAgent(BaseAgent):
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    """
+    Layer-1 monitoring. When `mcp_client` is set (e.g. MockMCPClient), weather/regional signals
+    simulate the MCP → external API path from the product architecture.
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None, mcp_client: Any = None):
         super().__init__(config or MONITOR_AGENT_CONFIG)
         self.trigger_thresholds = self.config["trigger_thresholds"]
+        self.mcp_client = mcp_client
 
-    async def fetch_weather_data(self, city: str) -> Dict[str, Any]:
-        return {"city": city, "rainfall_cm": 0.0, "temperature": 25.0, "alerts": []}
+    async def fetch_weather_data(self, city: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if self.mcp_client is not None:
+            bundle = await self.mcp_client.get_monitoring_signals(city, context=context or {})
+            return dict(bundle.get("weather") or {})
+        out = {"city": city, "rainfall_cm": 0.0, "temperature": 25.0, "alerts": []}
+        wr = (context or {}).get("worker_row") or {}
+        if wr.get("rainfall_cm") is not None and str(wr.get("rainfall_cm", "")) != "":
+            try:
+                out["rainfall_cm"] = float(wr["rainfall_cm"])
+            except (TypeError, ValueError):
+                pass
+        if wr.get("temperature_extreme") is not None and str(wr.get("temperature_extreme", "")) != "":
+            try:
+                out["temperature"] = float(wr["temperature_extreme"])
+            except (TypeError, ValueError):
+                pass
+        return out
 
     async def check_trigger_conditions(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         triggers: List[Dict[str, Any]] = []
@@ -101,16 +122,55 @@ class MonitorAgent(BaseAgent):
             triggers.append({"type": "heat", "severity": temp})
         elif temp <= self.trigger_thresholds["temperature_low"]:
             triggers.append({"type": "cold", "severity": temp})
+        has_rain = any(t.get("type") == "rainfall" for t in triggers)
+        has_heat = any(t.get("type") == "heat" for t in triggers)
+        for a in data.get("alerts") or []:
+            if not isinstance(a, dict):
+                continue
+            at = str(a.get("type", ""))
+            if at == "Heavy_Rain" and has_rain:
+                continue
+            if at == "Extreme_Heat" and has_heat:
+                continue
+            if at in ("Cyclone", "Labor_Action", "Extreme_Heat", "Heavy_Rain"):
+                triggers.append(
+                    {
+                        "type": at.lower() if at != "Labor_Action" else "strike",
+                        "severity": a.get("severity", "unknown"),
+                        "source": a.get("source", "alert_feed"),
+                        "detail": a,
+                    }
+                )
         return triggers
+
+    def _enrich_triggers(self, triggers: List[Dict[str, Any]], regional: Dict[str, Any]) -> None:
+        aw = int(regional.get("affected_workers_estimate", 50))
+        dh = float(regional.get("disruption_duration_hours", 4.0))
+        for t in triggers:
+            t.setdefault("affected_workers", aw)
+            t.setdefault("duration_hours", dh)
 
     async def process(self, input_data: Dict[str, Any], trace_id: str) -> AgentMessage:
         city = input_data.get("city", "unknown")
-        weather = await self.fetch_weather_data(str(city))
+        ctx = {k: input_data[k] for k in ("worker_id", "outlet_id", "worker_row") if k in input_data}
+        mcp_bundle: Dict[str, Any] = {}
+        if self.mcp_client is not None:
+            mcp_bundle = await self.mcp_client.get_monitoring_signals(str(city), context=ctx)
+            weather = dict(mcp_bundle.get("weather") or {})
+            regional = dict(mcp_bundle.get("regional") or {})
+        else:
+            weather = await self.fetch_weather_data(str(city), context=ctx)
+            regional = {}
         triggers = await self.check_trigger_conditions(weather)
+        self._enrich_triggers(triggers, regional)
         mtype = "trigger_detected" if triggers else "no_trigger"
         return self.create_message(
             mtype,
-            {"triggers": triggers, "weather_data": weather},
+            {
+                "triggers": triggers,
+                "weather_data": weather,
+                "mcp_bundle": mcp_bundle if mcp_bundle else None,
+            },
             trace_id,
             priority="high" if triggers else "low",
         )

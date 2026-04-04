@@ -46,6 +46,7 @@ from src.rag.rag_system import RAGRetriever, VectorStore, populate_knowledge_bas
 from src.pipeline.training_pipeline import InferencePipeline
 from src.models.deterministic_models import ClaimEligibilityModel, PayoutOptimizationModel
 from src.utils.schema import ensure_worker_columns
+from src.integrations.mock_mcp_client import default_mcp_client
 
 
 logger = logging.getLogger(__name__)
@@ -77,9 +78,11 @@ class GigShieldLangChainOrchestrator:
         inference_pipeline: Optional[InferencePipeline] = None,
         vector_store: Optional[VectorStore] = None,
         ensure_kb: bool = True,
+        mcp_client: Any = None,
     ):
         self.llm = get_llm()
         self.inference_pipeline = inference_pipeline
+        self.mcp_client = mcp_client if mcp_client is not None else default_mcp_client()
 
         self.vector_store = vector_store or VectorStore()
         if ensure_kb:
@@ -90,7 +93,7 @@ class GigShieldLangChainOrchestrator:
 
         self.rag_retriever = RAGRetriever(self.vector_store)
 
-        self.monitor_agent = MonitorAgent()
+        self.monitor_agent = MonitorAgent(mcp_client=self.mcp_client)
         self.validation_agent = ValidationAgent()
         self.context_agent = ContextAgent(self.rag_retriever)
 
@@ -130,8 +133,16 @@ class GigShieldLangChainOrchestrator:
         rag_answers: Dict[str, str] = {}
         messages: List[AgentMessage] = []
 
-        # 1 Monitor
-        mon = await self.monitor_agent.process({"city": city}, trace_id)
+        # 1 Monitor (MCP mock or worker-grounded signals)
+        mon = await self.monitor_agent.process(
+            {
+                "city": city,
+                "worker_id": row.get("worker_id"),
+                "outlet_id": row.get("outlet_id"),
+                "worker_row": row,
+            },
+            trace_id,
+        )
         messages.append(mon)
 
         # 2 Validation (+ RAG context in data)
@@ -230,6 +241,22 @@ class GigShieldLangChainOrchestrator:
                 "ml_keys": list(ml_predictions.keys()) if ml_predictions else [],
             },
         )
+
+        if self.mcp_client is not None and hasattr(self.mcp_client, "submit_claim_rollout"):
+            try:
+                await self.mcp_client.submit_claim_rollout(
+                    {
+                        "trace_id": trace_id,
+                        "worker_id": wid,
+                        "decision": decision,
+                        "payout_amount": payout_amount,
+                        "city": city,
+                        "eligibility": elig.is_eligible,
+                        "langchain_workflow": True,
+                    }
+                )
+            except Exception:
+                pass
 
         end = datetime.now()
         ms = (end - start).total_seconds() * 1000.0

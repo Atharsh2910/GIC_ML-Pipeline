@@ -33,6 +33,7 @@ from src.agents.core_agents import (
 from src.rag.rag_system import RAGRetriever, VectorStore
 from src.pipeline.training_pipeline import InferencePipeline
 from src.models.deterministic_models import ClaimEligibilityModel, PayoutOptimizationModel
+from src.integrations.mock_mcp_client import default_mcp_client
 
 
 @dataclass
@@ -53,12 +54,14 @@ class GigShieldOrchestrator:
         self,
         inference_pipeline: Optional[InferencePipeline] = None,
         vector_store: Optional[VectorStore] = None,
+        mcp_client: Any = None,
     ):
         self.inference_pipeline = inference_pipeline
         self.vector_store = vector_store or VectorStore()
         self.rag_retriever = RAGRetriever(self.vector_store)
 
-        self.monitor_agent = MonitorAgent()
+        self.mcp_client = mcp_client if mcp_client is not None else default_mcp_client()
+        self.monitor_agent = MonitorAgent(mcp_client=self.mcp_client)
         self.validation_agent = ValidationAgent()
         self.context_agent = ContextAgent(self.rag_retriever)
 
@@ -73,8 +76,13 @@ class GigShieldOrchestrator:
         self.claim_eligibility = ClaimEligibilityModel()
         self.payout_calculator = PayoutOptimizationModel()
 
-    async def layer_1_monitoring(self, city: str, trace_id: str) -> AgentMessage:
-        return await self.monitor_agent.process({"city": city}, trace_id)
+    async def layer_1_monitoring(self, city: str, trace_id: str, worker_row: Optional[Dict[str, Any]] = None) -> AgentMessage:
+        payload: Dict[str, Any] = {"city": city}
+        if worker_row:
+            payload["worker_id"] = worker_row.get("worker_id")
+            payload["outlet_id"] = worker_row.get("outlet_id")
+            payload["worker_row"] = worker_row
+        return await self.monitor_agent.process(payload, trace_id)
 
     async def layer_2_validation(self, monitor_output: AgentMessage, trace_id: str) -> AgentMessage:
         rag_context = self.rag_retriever.retrieve_context(
@@ -110,13 +118,13 @@ class GigShieldOrchestrator:
         if city is None:
             city = str(worker_data.iloc[0].get("city", "Mumbai"))
 
-        mon = await self.layer_1_monitoring(city, trace_id)
+        wdict = worker_data.iloc[0].to_dict()
+        mon = await self.layer_1_monitoring(city, trace_id, worker_row=wdict)
         val = await self.layer_2_validation(mon, trace_id)
-        ctx = await self.layer_3_context(worker_data.iloc[0].to_dict(), trace_id)
+        ctx = await self.layer_3_context(wdict, trace_id)
         layer4 = await self.layer_4_parallel(worker_data, trace_id)
         decision_msg = await self.layer_5_decision(layer4["parallel_messages"], trace_id)
 
-        wdict = worker_data.iloc[0].to_dict()
         eligibility = self.claim_eligibility.evaluate_eligibility(wdict)
 
         payout_amount = 0.0
@@ -129,6 +137,21 @@ class GigShieldOrchestrator:
         ms = (end - start).total_seconds() * 1000.0
 
         agent_outputs = [mon, val, ctx, decision_msg] + layer4["parallel_messages"]
+
+        if self.mcp_client is not None and hasattr(self.mcp_client, "submit_claim_rollout"):
+            try:
+                await self.mcp_client.submit_claim_rollout(
+                    {
+                        "trace_id": trace_id,
+                        "worker_id": int(wdict.get("worker_id", 0)),
+                        "decision": str(decision_msg.data.get("decision", "")),
+                        "payout_amount": payout_amount,
+                        "city": city,
+                        "eligibility": eligibility.is_eligible,
+                    }
+                )
+            except Exception:
+                pass
 
         return WorkflowResult(
             trace_id=trace_id,

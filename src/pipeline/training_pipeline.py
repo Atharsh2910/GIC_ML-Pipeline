@@ -354,86 +354,23 @@ class InferencePipeline:
 
 
 if __name__ == "__main__":
-    # Generate synthetic training data for testing
-    print("Generating synthetic training data...")
-    
-    np.random.seed(42)
-    n_workers = 1000
-    n_weeks_per_worker = 52
-    
-    data = []
-    for worker_id in range(n_workers):
-        base_income = np.random.uniform(5000, 15000)
-        
-        for week in range(n_weeks_per_worker):
-            # Simulate income with seasonality
-            seasonal_factor = 1 + 0.2 * np.sin(week / 52 * 2 * np.pi)
-            weekly_income = base_income * seasonal_factor + np.random.normal(0, 1000)
-            
-            data.append({
-                'worker_id': worker_id,
-                'weeks_active': week + 1,
-                'week_of_year': (week % 52) + 1,
-                'weekly_income': max(0, weekly_income),
-                'avg_52week_income': base_income,
-                'income_std_dev': 1000,
-                'income_volatility': np.random.uniform(0.1, 0.5),
-                'base_premium': base_income * 0.04,
-                'premium_amount': base_income * 0.04 * np.random.uniform(0.9, 1.2),
-                'consecutive_payment_weeks': np.random.randint(0, week + 1),
-                'payment_consistency_score': np.random.uniform(0.5, 1),
-                'fraud_trust_rating': np.random.uniform(0.3, 1),
-                'overall_risk_score': np.random.uniform(0, 1),
-                'disruption_duration_hours': np.random.randint(0, 24),
-                'rainfall_cm': np.random.uniform(0, 25),
-                'orders_completed_week': np.random.randint(10, 60),
-                'active_hours_week': np.random.uniform(20, 60),
-                'gps_spoofing_score': np.random.uniform(0, 0.5),
-                'movement_realism_score': np.random.uniform(0.6, 1),
-                'presence_score': np.random.uniform(0.6, 1),
-                'peer_group_activity_ratio': np.random.uniform(0.8, 1.2),
-                'income_loss_percentage': np.random.uniform(0, 0.5),
-                'selected_slab': np.random.choice(['Basic', 'Standard', 'Premium', 'Elite']),
-                'premium_paid': np.random.randint(0, 2),
-                'cooling_period_completed': 1 if week >= 8 else 0,
-                'order_acceptance_rate': np.random.uniform(0.6, 1),
-                'order_decline_rate': np.random.uniform(0, 0.4),
-                'distance_from_outlet_km': np.random.uniform(0, 15),
-                'coordinated_fraud_cluster_id': np.random.randint(0, 5),
-                'disruption_exposure_risk': np.random.uniform(0, 1),
-                'city': np.random.choice(['Mumbai', 'Delhi', 'Bengaluru']),
-                'platform': np.random.choice(['Zepto', 'Blinkit', 'Instamart']),
-                'disruption_type': np.random.choice(['rainfall', 'heat', 'cyclone']),
-                'temperature_extreme': np.random.uniform(0, 45),
-                'cyclone_alert_level': np.random.randint(0, 3),
-                'default_weeks': np.random.randint(0, 6),
-                'claims_past_52_weeks': np.random.randint(0, 4),
-                'employment_type': 'full_time',
-                'ip_gps_mismatch': np.random.randint(0, 2),
-                'device_sharing_flag': np.random.randint(0, 2),
-                'highest_weekly_income': base_income * 1.2,
-                'lowest_weekly_income': base_income * 0.6,
-                'income_loss_amount': 0.0,
-                'coverage_percentage': np.random.uniform(0.4, 1.0),
-                'loyalty_bonus_percentage': np.random.uniform(0, 0.15),
-                'penalty_percentage': np.random.uniform(0, 0.1),
-                'final_payout_amount': 0.0,
-                'outlet_id': np.random.randint(1, 500),
-                'worker_lat': 19.0 + np.random.randn() * 0.01,
-                'worker_lon': 72.8 + np.random.randn() * 0.01,
-                'outlet_lat': 19.0 + np.random.randn() * 0.01,
-                'outlet_lon': 72.8 + np.random.randn() * 0.01,
-            })
-    
-    df = pd.DataFrame(data)
-    
-    # Save synthetic data
-    Path('data/raw').mkdir(parents=True, exist_ok=True)
-    df.to_csv('data/raw/worker_data.csv', index=False)
-    print(f"✓ Generated {len(df)} training records")
-    
-    # Run training pipeline
-    pipeline = MLTrainingPipeline('data/raw/worker_data.csv')
-    trained_models = pipeline.run_complete_training()
-    
+    """
+    Train from real CSV under data/raw (no synthetic generator).
+    Uses DATA_PATHS['raw_data'] or the first existing fallback.
+    """
+    Path("data/raw").mkdir(parents=True, exist_ok=True)
+    preferred = Path(DATA_PATHS["raw_data"])
+    fallbacks = [
+        preferred,
+        Path("data/raw/quick_commerce_synthetic_data52k.csv"),
+        Path("data/raw/final_dataset.csv"),
+    ]
+    data_path = next((str(p) for p in fallbacks if p.is_file()), str(preferred))
+    if not Path(data_path).is_file():
+        raise SystemExit(
+            f"No training CSV found. Place data at {preferred} or data/raw/quick_commerce_synthetic_data52k.csv"
+        )
+    print(f"Training from: {data_path}")
+    pipeline = MLTrainingPipeline(data_path)
+    pipeline.run_complete_training()
     print("\n✓ Training pipeline complete!")
