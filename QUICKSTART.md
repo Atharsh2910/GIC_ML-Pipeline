@@ -1,6 +1,10 @@
 # 🚀 Gig Insurance Company — Quick Start Guide
 
+<<<<<<< HEAD
 > **Gig Insurance Company** is an AI-powered parametric insurance platform for gig workers. It uses ML models, multi-agent orchestration (LangChain + LangGraph), RAG-augmented decision-making, and MCP-integrated external signals to automatically detect weather/disruption events and trigger payouts — no paperwork required.
+=======
+> **GigShield** is an AI-powered parametric insurance platform for gig workers. It uses ML models, multi-agent orchestration (LangChain + LangGraph), RAG-augmented decision-making, and MCP-integrated external signals to automatically detect weather/disruption events and trigger payouts — no paperwork required.
+>>>>>>> 8120974e535640c8672484dc9104a73191150db8
 
 ---
 
