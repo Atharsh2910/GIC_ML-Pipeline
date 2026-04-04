@@ -14,12 +14,12 @@ AGENT_SYSTEM_CONFIG = {
 
 # LangChain & LLM Configuration
 LANGCHAIN_CONFIG = {
-    'llm_provider': 'openai',  # 'openai', 'anthropic', 'ollama'
-    'model_name': 'gpt-4o-mini',
+    'llm_provider': 'groq',  # 'groq', 'openai', 'anthropic', 'ollama'
+    'model_name': 'llama-3.3-70b-versatile',
     'temperature': 0.1,
     'max_tokens': 2000,
     'top_p': 0.9,
-    'api_key_env': 'OPENAI_API_KEY',
+    'api_key_env': 'GROQ_API_KEY',
 }
 
 # Vector Store Configuration

@@ -42,8 +42,22 @@ class AgentMessage:
 
 def get_llm():
     """Return a LangChain chat model if API key available; else None."""
-    provider = LANGCHAIN_CONFIG.get("llm_provider", "openai")
-    if provider == "openai":
+    provider = LANGCHAIN_CONFIG.get("llm_provider", "groq")
+    if provider == "groq":
+        key = os.getenv(LANGCHAIN_CONFIG.get("api_key_env", "GROQ_API_KEY"))
+        if not key:
+            return None
+        try:
+            from langchain_groq import ChatGroq
+
+            return ChatGroq(
+                model=LANGCHAIN_CONFIG.get("model_name", "llama-3.3-70b-versatile"),
+                temperature=LANGCHAIN_CONFIG.get("temperature", 0.1),
+                api_key=key,
+            )
+        except Exception:
+            return None
+    elif provider == "openai":
         key = os.getenv(LANGCHAIN_CONFIG.get("api_key_env", "OPENAI_API_KEY"))
         if not key:
             return None

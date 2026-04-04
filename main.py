@@ -113,7 +113,7 @@ async def run_autonomous_system(worker_data_path: str, model_dir: str = "models"
 
 
 async def run_autonomous_langchain_system(worker_data_path: str, model_dir: str = "models"):
-    """Run RAG + LangChain orchestrator (requires OPENAI_API_KEY for LLM chains; RAG still works)."""
+    """Run RAG + LangChain orchestrator (requires GROQ_API_KEY for LLM chains; RAG still works)."""
     from src.agents.langchain_orchestrator import GigShieldLangChainOrchestrator
 
     print("\n🚀 GigShield LangChain + RAG pipeline...")
@@ -160,7 +160,7 @@ async def run_autonomous_langchain_system(worker_data_path: str, model_dir: str 
 
 
 async def run_autonomous_langgraph_system(worker_data_path: str, model_dir: str = "models"):
-    """LangGraph + tool-calling agents + RAG tools + Supabase/SQLite persistence (requires OPENAI_API_KEY)."""
+    """LangGraph + tool-calling agents + RAG tools + Supabase/SQLite persistence (requires GROQ_API_KEY)."""
     from src.agents.gigshield_langgraph import GigShieldLangGraphOrchestrator
     from src.utils.schema import ensure_worker_columns
 

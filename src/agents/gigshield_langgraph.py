@@ -4,7 +4,7 @@ LangGraph multi-agent orchestration with LangChain tool-calling agents (create_t
 Flow: Monitor → Validation → Context → ML/rule scoring (deterministic + trained models) →
 parallel specialist agents (Fraud, Risk, Rules) → Decision agent → deterministic eligibility/payout → Supabase persist.
 
-Requires a modern LangChain stack (see requirements.txt). OPENAI_API_KEY must be set for LLM agents.
+Requires a modern LangChain stack (see requirements.txt). GROQ_API_KEY must be set for LLM agents.
 """
 
 from __future__ import annotations
@@ -160,7 +160,7 @@ class GigShieldLangGraphOrchestrator:
     ):
         self.llm = get_llm()
         if self.llm is None:
-            raise RuntimeError("GigShieldLangGraphOrchestrator requires OPENAI_API_KEY (or configured Chat LLM).")
+            raise RuntimeError("GigShieldLangGraphOrchestrator requires GROQ_API_KEY (or configured Chat LLM).")
 
         self.inference_pipeline = inference_pipeline
         self.vector_store = vector_store or VectorStore()

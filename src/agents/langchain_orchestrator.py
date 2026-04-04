@@ -69,7 +69,7 @@ class LangChainWorkflowResult:
 
 class GigShieldLangChainOrchestrator:
     """
-    Full pipeline with LangChain RAG chains when OPENAI_API_KEY (or configured provider) is set.
+    Full pipeline with LangChain RAG chains when GROQ_API_KEY (or configured provider) is set.
     Without LLM: same agent flow, RAG retrieval still runs for validation/context (text only).
     """
 
