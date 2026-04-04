@@ -3,9 +3,9 @@ import random
 import uuid
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import APIRouter
 
-app = FastAPI(title="GigShield Realistic Multi-City Mock APIs")
+router = APIRouter(tags=["Mock Realistic Multi-City API"])
 
 # -------------------------------
 # CONFIG
@@ -77,7 +77,7 @@ HARDCODED_NEWS = {
 # WEATHER API
 # -------------------------------
 
-@app.get("/api/weather")
+@router.get("/api/weather")
 def weather(city: str = "Chennai", scenario: Optional[str] = None):
     areas = _areas_for_city(city)
     reports = []
@@ -125,7 +125,7 @@ def weather(city: str = "Chennai", scenario: Optional[str] = None):
 # NEWS API (HYBRID)
 # -------------------------------
 
-@app.get("/api/news")
+@router.get("/api/news")
 def news(city: Optional[str] = None, scenario: Optional[str] = None, limit: int = 10):
     articles = []
 
@@ -156,7 +156,7 @@ def news(city: Optional[str] = None, scenario: Optional[str] = None, limit: int 
 # -------------------------------
 # TELECOM API
 # -------------------------------
-@app.get("/api/telecom")
+@router.get("/api/telecom")
 def telecom(city: str = "Chennai", scenario: Optional[str] = None):
     outages = []
 
@@ -215,7 +215,7 @@ def telecom(city: str = "Chennai", scenario: Optional[str] = None):
 # FUEL API
 # -------------------------------
 
-@app.get("/api/fuel")
+@router.get("/api/fuel")
 def fuel(city: str = "Chennai", limit: int = 10):
     headlines = [
         "Long queues observed at fuel stations across the city",
@@ -250,7 +250,7 @@ def fuel(city: str = "Chennai", limit: int = 10):
 # PLATFORM API
 # -------------------------------
 
-@app.get("/api/platform")
+@router.get("/api/platform")
 def platform(city: Optional[str] = None, limit: int = 10):
     incidents = []
 
@@ -297,7 +297,7 @@ def platform(city: Optional[str] = None, limit: int = 10):
 # -------------------------------
 
 
-@app.post("/api/claims/rollout")
+@router.post("/api/claims/rollout")
 def claims_rollout(payload: Dict[str, Any]) -> Dict[str, Any]:
     ack_id = str(uuid.uuid4())
     _CLAIM_ROLLOUT_LOG.append(
