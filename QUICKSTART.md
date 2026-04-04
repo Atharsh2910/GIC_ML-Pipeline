@@ -109,15 +109,7 @@ The frontend runs at: **http://localhost:5173**
 
 ---
 
-## 🔑 Login Credentials
 
-### Demo Accounts (hardcoded — no Supabase needed)
-
-| Worker ID | Password | Name | City |
-|-----------|----------|------|------|
-| `Z001` | `demo` | Arjun Selvam | Chennai |
-| `Z002` | `demo` | Meena Krishnan | Chennai |
-| `Z003` | `demo` | Priya Devi | Chennai |
 
 ### Registered Accounts
 
