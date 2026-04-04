@@ -1,4 +1,4 @@
-# GigShield - An Autonomous Parametric Income Insurance for Gig Workers
+# Gig Insurance Company - An Autonomous Parametric Income Insurance for Gig Workers
 
 --- 
 
