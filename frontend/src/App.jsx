@@ -280,6 +280,55 @@ function LoginPage({ onLogin, onRegister }) {
     const slabToPlan = { "Slab_100": "premium", "Slab_75": "standard", "Slab_50": "standard", "Slab_25": "basic" };
     const chosenPlan = slabToPlan[dbRecord.selected_slab] || "premium";
 
+    // Binomial Distribution Logic
+    const shortDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const daysArr = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const currentDayName = worker.current_day || "Monday";
+    const currentDayIdx = daysArr.indexOf(currentDayName);
+    
+    const totalToDistribute = dbRecord.weekly_income || 0;
+    
+    // Binomial coefficient helper: nCk
+    const nCr = (n, r) => {
+      if (r < 0 || r > n) return 0;
+      if (r === 0 || r === n) return 1;
+      let res = 1;
+      for (let i = 1; i <= r; i++) res = res * (n - i + 1) / i;
+      return res;
+    };
+
+    // Calculate weights for all active days (0 to currentDayIdx)
+    // We use B(n, k) where n = currentDayIdx
+    const weights = [];
+    let totalWeight = 0;
+    for (let i = 0; i <= currentDayIdx; i++) {
+        const w = nCr(currentDayIdx, i);
+        weights.push(w);
+        totalWeight += w;
+    }
+
+    const currentWeekDays = shortDays.map((short, idx) => {
+      let earning = 0;
+      let dateLabel = "Future";
+      let isDisrupted = false;
+
+      if (idx <= currentDayIdx) {
+        // Active or Past day
+        const weight = weights[idx];
+        earning = (weight / totalWeight) * totalToDistribute;
+        dateLabel = (idx === currentDayIdx) ? "Today" : "Past";
+        if (idx === currentDayIdx) isDisrupted = (dbRecord.rainfall_cm || 0) > 10;
+      }
+
+      return {
+        day: short,
+        date: dateLabel,
+        earning: earning,
+        rainfallCm: idx === currentDayIdx ? (dbRecord.rainfall_cm || 0) : 0,
+        disrupted: isDisrupted
+      };
+    });
+
     PARTNERS[newId] = {
       id: newId,
       name: worker.name,
@@ -298,15 +347,7 @@ function LoginPage({ onLogin, onRegister }) {
       pastWeeklyEarnings: Array(10).fill(dbRecord.avg_52week_income || 5000),
       pastWeeklyPaid: Array(10).fill(true),
       pastWeeklyClaimed: Array(10).fill(false),
-      currentWeekDays: [
-        { day:"Mon", date:"Today", earning: dbRecord.weekly_income || 0, rainfallCm: dbRecord.rainfall_cm || 0, disrupted: dbRecord.rainfall_cm > 10 },
-        { day:"Tue", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-        { day:"Wed", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-        { day:"Thu", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-        { day:"Fri", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-        { day:"Sat", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-        { day:"Sun", date:"Future", earning: 0, rainfallCm: 0, disrupted: false },
-      ],
+      currentWeekDays: currentWeekDays,
     };
     
     onLogin(newId);
