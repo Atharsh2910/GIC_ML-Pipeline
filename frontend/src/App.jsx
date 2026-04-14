@@ -812,7 +812,7 @@ function PaymentPage({ partnerId, planKey, onBack, onSuccess }) {
 
     try {
       // 1. Create order on the server
-      const orderRes = await fetch(`http://127.0.0.1:8001/api/payment/create-order?amount=${premium}`, {
+      const orderRes = await fetch(`http://127.0.0.1:8000/api/payment/create-order?amount=${premium}`, {
         method: "POST"
       });
       
@@ -832,7 +832,7 @@ function PaymentPage({ partnerId, planKey, onBack, onSuccess }) {
         handler: async function (response) {
           try {
             // 3. Verify signature on the server
-            const verifyRes = await fetch("http://127.0.0.1:8001/api/payment/verify", {
+            const verifyRes = await fetch("http://127.0.0.1:8000/api/payment/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1306,7 +1306,7 @@ export default function App() {
     if (partnerId && PARTNERS[partnerId]?.dbRecord) {
       setEvalLoading(true);
       const partner = PARTNERS[partnerId];
-      fetch("http://127.0.0.1:8001/api/evaluate_worker", {
+      fetch("http://127.0.0.1:8000/api/evaluate_worker", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1331,7 +1331,7 @@ export default function App() {
   // Fetch Payment Transactions from Backend
   useEffect(() => {
     if (partnerId) {
-      fetch(`http://127.0.0.1:8001/api/payment/history/${partnerId}`)
+      fetch(`http://127.0.0.1:8000/api/payment/history/${partnerId}`)
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setPaymentTransactions(data);
