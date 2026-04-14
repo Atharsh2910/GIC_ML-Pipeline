@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Shield, Zap, Gem, LogIn, ChevronRight, AlertTriangle,
   CloudRain, TrendingDown, CheckCircle, Clock,
@@ -105,12 +106,12 @@ function getRainCoveragePct(cm) {
   return 0.95;
 }
 
-function computePricing(partner) {
+function computePricing(partner, planKey = null) {
   const avg = Math.round(partner.pastWeeklyEarnings.reduce((a, b) => a + b, 0) / partner.pastWeeklyEarnings.length);
   // For new customers, null entries in pastWeeklyPaid are not counted as defaults
   const defaults = partner.pastWeeklyPaid.filter(p => p === false).length;
   const claims = partner.pastWeeklyClaimed.filter(c => c).length;
-  const tier = getTier(partner.chosenPlan);
+  const tier = getTier(planKey || partner.chosenPlan);
   const isNewCustomer = !!partner.isNewCustomer;
 
   // ── Premium ──────────────────────────────────────────────────────────────
@@ -464,7 +465,7 @@ function EarningsChart({ partner, pricing }) {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ partnerId, evaluation, evalLoading, onSelectPlan, onViewClaim, onPayPremium, onLogout, onSimulate }) {
+function Dashboard({ partnerId, evaluation, evalLoading, paymentTransactions = [], onSelectPlan, onViewClaim, onPayPremium, onLogout, onSimulate }) {
   const partner = PARTNERS[partnerId];
   const pricing = useMemo(() => computePricing(partner), [partner]);
   const tier = pricing.tier;
@@ -541,7 +542,7 @@ function Dashboard({ partnerId, evaluation, evalLoading, onSelectPlan, onViewCla
           <div className="stat-card">
             <div className="stat-head"><span className="stat-label">Claims Filed</span><span className="stat-icon"><ShieldCheck size={16} /></span></div>
             <div className="stat-val" style={{ color: "var(--purple)" }}>{pricing.claims}</div>
-            <div className="stat-sub">{pricing.defaults} defaults &nbsp;·&nbsp; {fmt(pricing.weeklyPremium)} premium/wk</div>
+            <div className="stat-sub">{paymentTransactions.length} app payments &nbsp;·&nbsp; {fmt(pricing.weeklyPremium)} premium/wk</div>
           </div>
         </div>
 
@@ -597,6 +598,42 @@ function Dashboard({ partnerId, evaluation, evalLoading, onSelectPlan, onViewCla
           </div>
         )}
 
+        {/* Recent Payments Section */}
+        {paymentTransactions.length > 0 && (
+          <div className="card" style={{ marginBottom: 13 }}>
+            <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><CreditCard size={13} /> Recent Verified Payments</span>
+              <span style={{ fontSize: 10, color: 'var(--green)', background: 'var(--green-bg)', padding: '2px 8px', borderRadius: 10, border: '1px solid var(--green-bdr)', fontWeight: 700 }}>LIVE</span>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              {paymentTransactions.slice(0, 3).map((tx, idx) => (
+                <div key={tx.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: (idx === 2 || idx === paymentTransactions.length - 1) ? 'none' : '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--green-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckCircle size={14} color="var(--green)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--purple-dark)' }}>Premium Payment Success</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{new Date(tx.created_at).toLocaleDateString()} · {tx.razorpay_payment_id}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{fmt(tx.amount)}</div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Verified</div>
+                  </div>
+                </div>
+              ))}
+              {paymentTransactions.length > 3 && (
+                <div style={{ textAlign: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                   <button onClick={onViewClaim} style={{ background: "none", border: "none", color: "var(--purple)", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, margin: "0 auto" }}>
+                     View All {paymentTransactions.length} Transactions <ChevronRight size={12} />
+                   </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Simulation CTA */}
         <div className="sim-cta-strip">
           <div className="sim-cta-left">
@@ -632,8 +669,8 @@ function Dashboard({ partnerId, evaluation, evalLoading, onSelectPlan, onViewCla
 // ─── PLAN SELECTOR ────────────────────────────────────────────────────────────
 function PlanSelector({ partnerId, onBack, onPay }) {
   const partner = PARTNERS[partnerId];
-  const pricing = useMemo(() => computePricing(partner), [partner]);
-  const [selected, setSelected] = useState(pricing.tier.key);
+  const [selected, setSelected] = useState(PARTNERS[partnerId].chosenPlan);
+  const pricing = useMemo(() => computePricing(partner, selected), [partner, selected]);
 
   const planMeta = [
     { key: "basic", Icon: Shield },
@@ -686,7 +723,7 @@ function PlanSelector({ partnerId, onBack, onPay }) {
           <div>
             <div style={{ fontSize: 11, color: "#C4A8E0", letterSpacing: 1, textTransform: "uppercase", marginBottom: 5 }}>Next Week's Premium Due · 16–22 Jun 2025</div>
             <div style={{ fontSize: 13, color: "rgba(250,248,255,0.78)" }}>
-              Slab 3: {(pricing.tier.rate * 100).toFixed(1)}% × {fmt(pricing.nextAvg)} = {fmt(pricing.nextPlanPremium)}
+              {pricing.tier.tabLabel}: {(pricing.tier.rate * 100).toFixed(1)}% × {fmt(pricing.nextAvg)} = {fmt(pricing.nextPlanPremium)}
               {pricing.defaultPenaltyAmt > 0 && ` + ${fmt(pricing.defaultPenaltyAmt)} default penalty`}
               {pricing.nextLoyaltyAmt > 0 && ` − ${fmt(pricing.nextLoyaltyAmt)} loyalty reward`}
             </div>
@@ -756,11 +793,90 @@ function PlanSelector({ partnerId, onBack, onPay }) {
 // ─── PAYMENT PAGE ─────────────────────────────────────────────────────────────
 function PaymentPage({ partnerId, planKey, onBack, onSuccess }) {
   const partner = PARTNERS[partnerId];
-  const pricing = useMemo(() => computePricing(partner), [partner]);
+  const pricing = useMemo(() => computePricing(partner, planKey), [partner, planKey]);
   const tier = TIERS[planKey];
   const premium = pricing.nextPremium;
   const [method, setMethod] = useState("UPI");
   const [loading, setLoading] = useState(false);
+
+  const handlePayment = async () => {
+    if (!window.Razorpay) {
+      alert("Razorpay SDK failed to load. Are you online?");
+      return;
+    }
+
+    setLoading(true);
+    const monthName = new Date().toLocaleString('default', { month: 'long' });
+    const date = new Date().getDate();
+    const randomPhone = "9" + Math.floor(100000000 + Math.random() * 900000000);
+
+    try {
+      // 1. Create order on the server
+      const orderRes = await fetch(`http://127.0.0.1:8001/api/payment/create-order?amount=${premium}`, {
+        method: "POST"
+      });
+      
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        throw new Error(orderData.detail || "Failed to create payment order on server.");
+      }
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_TEST_KEY_ID,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "Gig Insurance Company",
+        description: `premium payment for ${monthName} ${date}`,
+        order_id: orderData.id,
+        handler: async function (response) {
+          try {
+            // 3. Verify signature on the server
+            const verifyRes = await fetch("http://127.0.0.1:8001/api/payment/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                worker_id: partnerId,
+                amount: premium
+              })
+            });
+
+            if (!verifyRes.ok) throw new Error("Payment verification failed on server.");
+            
+            setLoading(false);
+            onSuccess();
+          } catch (err) {
+            console.error(err);
+            alert("Verification Error: " + err.message);
+            setLoading(false);
+          }
+        },
+        prefill: {
+          name: partner.name,
+          email: "tjkamlesh@gmail.com",
+          contact: randomPhone,
+          method: method.toLowerCase(),
+        },
+        theme: {
+          color: "#3399cc",
+        },
+      };
+
+      const rzp1 = new window.Razorpay(options);
+      rzp1.on('payment.failed', function (response) {
+        alert("Payment Failed: " + response.error.description);
+        setLoading(false);
+      });
+      rzp1.open();
+    } catch (err) {
+      console.error(err);
+      alert("Order Error: " + err.message);
+      setLoading(false);
+    }
+  };
 
   const methods = [
     { id: "UPI", icon: <Smartphone size={14} />, label: "UPI" },
@@ -801,7 +917,7 @@ function PaymentPage({ partnerId, planKey, onBack, onSuccess }) {
         </div>
         <button
           className="btn-accent"
-          onClick={() => { setLoading(true); setTimeout(() => { setLoading(false); onSuccess(); }, 1800); }}
+          onClick={handlePayment}
           disabled={loading}
         >
           {loading ? <span className="spin"><Radio size={16} /></span> : <><Lock size={15} /> Pay {fmt(premium)}</>}
@@ -841,7 +957,7 @@ function PaymentSuccess({ partnerId, planKey, onDone }) {
 }
 
 // ─── RICH CLAIM DETAIL VIEW ───────────────────────────────────────────────────
-function ClaimDetailView({ partnerId, evaluation, evalLoading, onBack, onPayPremium }) {
+function ClaimDetailView({ partnerId, evaluation, evalLoading, paymentTransactions = [], onBack, onPayPremium }) {
   const partner = PARTNERS[partnerId];
   const pricing = useMemo(() => computePricing(partner), [partner]);
   const p = pricing;
@@ -1029,7 +1145,45 @@ function ClaimDetailView({ partnerId, evaluation, evalLoading, onBack, onPayPrem
 
         {/* 3. Payment History */}
         <div className="section-card">
-          <div className="section-title">Payment History — Past 10 Weeks</div>
+          <div className="section-title">Verified Payment Transactions (Razorpay)</div>
+          <div className="section-sub">Real-time payments confirmed via backend signature verification</div>
+          <div style={{ overflowX: "auto", marginTop: 16 }}>
+            {paymentTransactions.length === 0 ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: "var(--muted)", fontSize: 13, background: "var(--surface2)", borderRadius: 8 }}>
+                No Razorpay transactions found for this worker record.
+              </div>
+            ) : (
+              <table className="history-table">
+                <thead>
+                  <tr>
+                    {["Date", "Payment ID", "Order ID", "Amount", "Status"].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paymentTransactions.map((tx, i) => (
+                    <tr key={tx.id || i}>
+                      <td style={{ fontSize: 12 }}>{new Date(tx.created_at).toLocaleString()}</td>
+                      <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{tx.razorpay_payment_id}</td>
+                      <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>{tx.razorpay_order_id}</td>
+                      <td style={{ fontWeight: 700, color: "var(--green)" }}>{fmt(tx.amount)}</td>
+                      <td>
+                        <span className="history-badge" style={{ color: "var(--green)", background: "var(--green-bg)", borderColor: "var(--green-bdr)" }}>
+                          <CheckCircle size={10} /> {tx.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* 4. Legacy Payment History (Manual/Partner Data) */}
+        <div className="section-card">
+          <div className="section-title">Activity History — Past 10 Weeks</div>
           <div style={{ overflowX: "auto" }}>
             <table className="history-table">
               <thead>
@@ -1102,18 +1256,57 @@ function ClaimDetailView({ partnerId, evaluation, evalLoading, onBack, onPayPrem
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [partnerId, setPartnerId] = useState(() => localStorage.getItem("gigshield_partner_id"));
   const [screen, setScreen] = useState("login");
-  const [partnerId, setPartnerId] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [evaluation, setEvaluation] = useState(null);
   const [evalLoading, setEvalLoading] = useState(false);
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Sync screen with URL
+  useEffect(() => {
+    const path = location.pathname.substring(1);
+    
+    // Redirect to login if user is not authenticated and trying to access protected routes
+    if (!partnerId && !["login", "onboarding", ""].includes(path)) {
+      handleNavigation("login");
+      return;
+    }
+
+    if (!path || path === "") {
+      if (screen !== "login") setScreen("login");
+    } else if (["login", "dashboard", "plans", "payment", "paySuccess", "claim", "simulation", "onboarding"].includes(path)) {
+      if (screen !== path) setScreen(path);
+    }
+  }, [location.pathname, partnerId]);
+
+  // Handle internal navigation
+  const handleNavigation = (targetScreen) => {
+    setScreen(targetScreen);
+    navigate(`/${targetScreen}`);
+  };
+
+  const loginUser = (id) => {
+    localStorage.setItem("gigshield_partner_id", id);
+    setPartnerId(id);
+    handleNavigation("dashboard");
+  };
+
+  const logoutUser = () => {
+    localStorage.removeItem("gigshield_partner_id");
+    setPartnerId(null);
+    handleNavigation("login");
+  };
 
   // Call the REAL backend evaluation API whenever use logs in
   useEffect(() => {
     if (partnerId && PARTNERS[partnerId]?.dbRecord) {
       setEvalLoading(true);
       const partner = PARTNERS[partnerId];
-      fetch("http://localhost:8000/api/evaluate_worker", {
+      fetch("http://127.0.0.1:8001/api/evaluate_worker", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1135,49 +1328,64 @@ export default function App() {
     }
   }, [partnerId]);
 
+  // Fetch Payment Transactions from Backend
+  useEffect(() => {
+    if (partnerId) {
+      fetch(`http://127.0.0.1:8001/api/payment/history/${partnerId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setPaymentTransactions(data);
+        })
+        .catch(err => console.error("Failed to fetch payment history", err));
+    } else {
+      setPaymentTransactions([]);
+    }
+  }, [partnerId, screen]); // Re-fetch when screen changes (e.g. back from success)
+
   return (
     <div className="zgi">
       {screen === "login" && (
         <LoginPage
-          onLogin={id => { setPartnerId(id); setScreen("dashboard"); }}
-          onRegister={() => setScreen("onboarding")}
+          onLogin={loginUser}
+          onRegister={() => handleNavigation("onboarding")}
         />
       )}
       {screen === "onboarding" && (
-        <OnboardingPage onBack={() => setScreen("login")} />
+        <OnboardingPage onBack={() => handleNavigation("login")} />
       )}
       {screen === "dashboard" && partnerId && (
         <Dashboard
           partnerId={partnerId}
           evaluation={evaluation}
           evalLoading={evalLoading}
-          onSelectPlan={() => setScreen("plans")}
-          onViewClaim={() => setScreen("claim")}
-          onPayPremium={() => setScreen("plans")}
-          onSimulate={() => setScreen("simulation")}
-          onLogout={() => { setPartnerId(null); setScreen("login"); }}
+          paymentTransactions={paymentTransactions}
+          onSelectPlan={() => handleNavigation("plans")}
+          onViewClaim={() => handleNavigation("claim")}
+          onPayPremium={() => handleNavigation("plans")}
+          onSimulate={() => handleNavigation("simulation")}
+          onLogout={logoutUser}
         />
       )}
       {screen === "plans" && partnerId && (
         <PlanSelector
           partnerId={partnerId}
-          onBack={() => setScreen("dashboard")}
-          onPay={k => { setSelectedPlan(k); setScreen("payment"); }}
+          onBack={() => handleNavigation("dashboard")}
+          onPay={k => { setSelectedPlan(k); handleNavigation("payment"); }}
         />
       )}
       {screen === "payment" && selectedPlan && (
         <PaymentPage
           partnerId={partnerId}
           planKey={selectedPlan}
-          onBack={() => setScreen("plans")}
-          onSuccess={() => setScreen("paySuccess")}
+          onBack={() => handleNavigation("plans")}
+          onSuccess={() => handleNavigation("paySuccess")}
         />
       )}
       {screen === "paySuccess" && selectedPlan && (
         <PaymentSuccess
           partnerId={partnerId}
           planKey={selectedPlan}
-          onDone={() => setScreen("dashboard")}
+          onDone={() => handleNavigation("dashboard")}
         />
       )}
       {screen === "claim" && partnerId && (
@@ -1185,15 +1393,16 @@ export default function App() {
           partnerId={partnerId}
           evaluation={evaluation}
           evalLoading={evalLoading}
-          onBack={() => setScreen("dashboard")}
-          onPayPremium={() => setScreen("plans")}
+          paymentTransactions={paymentTransactions}
+          onBack={() => handleNavigation("dashboard")}
+          onPayPremium={() => handleNavigation("plans")}
         />
       )}
       {screen === "simulation" && partnerId && (
         <SimulationPage
           partnerId={partnerId}
           partnerData={PARTNERS[partnerId]}
-          onBack={() => setScreen("dashboard")}
+          onBack={() => handleNavigation("dashboard")}
         />
       )}
     </div>

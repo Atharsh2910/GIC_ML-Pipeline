@@ -28,8 +28,11 @@ from src.api.schemas import (
     EvaluateWorkerRequest,
     InferencePredictRequest,
     OrchestrateBatchRequest,
+    PaymentVerifyRequest,
     RAGRetrieveRequest,
 )
+import razorpay
+from supabase import create_client, Client
 
 _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
@@ -44,6 +47,7 @@ inference_pipeline: Any = None
 vector_store: Any = None
 classic_orchestrator: Any = None
 langgraph_orchestrator: Any = None
+supabase: Client = None
 
 
 def _model_paths(model_dir: str) -> Dict[str, str]:
@@ -165,6 +169,18 @@ def load_models_sync():
         logger.warning("LangGraph orchestrator: %s", e)
         print(f"[GigShield API] Warning: LangGraph offline (check GROQ_API_KEY): {e}")
 
+    try:
+        supabase_url = os.getenv("VITE_SUPABASE_URL")
+        supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY")
+        if supabase_url and supabase_key:
+            supabase = create_client(supabase_url, supabase_key)
+            print("[GigShield API] Supabase client initialized.")
+        else:
+            print("[GigShield API] Warning: Supabase credentials missing.")
+    except Exception as e:
+        logger.warning("Supabase init: %s", e)
+        print(f"[GigShield API] Warning: Supabase initialization failed: {e}")
+
     print("[GigShield API] Background loading complete.")
 
 
@@ -213,12 +229,14 @@ def create_app() -> FastAPI:
             "docs": "/docs",
             "health": "/health",
             "endpoints": {
-                "evaluate_worker_langgraph": "POST /api/evaluate_worker",
-                "orchestrate_batch": "POST /api/orchestrate",
-                "classic_claim": "POST /api/claims/process-classic",
+                "evaluate_worker": "POST /api/evaluate_worker",
+                "orchestrate": "POST /api/orchestrate",
+                "process_claim": "POST /api/claims/process-classic",
                 "ml_predict": "POST /api/inference/predict",
                 "rag": "POST /api/rag/retrieve",
-                "partner_mock": "GET /partner-mock/api/weather?city=Chennai (if mounted)",
+                "payment_create": "POST /api/payment/create-order",
+                "payment_verify": "POST /api/payment/verify",
+                "payment_history": "GET /api/payment/history/{worker_id}"
             },
         }
 
@@ -350,6 +368,113 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.exception("rag_retrieve")
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @application.post("/api/payment/create-order", tags=["Payment"])
+    async def create_payment_order(amount: float, currency: str = "INR"):
+        """
+        Create a Razorpay order.
+        """
+        key_id = os.getenv("RAZORPAY_KEY_ID")
+        key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        
+        print(f"[Razorpay] Creating order for amount: {amount} {currency}")
+        print(f"[Razorpay] Using Key ID: {key_id}")
+
+        if not key_id or not key_secret:
+            raise HTTPException(status_code=500, detail="Razorpay keys not configured on server. Check your .env file.")
+
+        try:
+            client = razorpay.Client(auth=(key_id, key_secret))
+            data = {
+                "amount": int(float(amount) * 100),  # amount in paise
+                "currency": currency,
+                "payment_capture": 1  # auto capture
+            }
+            order = client.order.create(data=data)
+            print(f"[Razorpay] Order created: {order.get('id')}")
+            return order
+        except Exception as e:
+            logger.error(f"Order creation failed: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to create Razorpay order: {str(e)}")
+
+    @application.post("/api/payment/verify", tags=["Payment"])
+    async def verify_payment(req: PaymentVerifyRequest):
+        """
+        Verify Razorpay payment signature.
+        """
+        key_id = os.getenv("RAZORPAY_KEY_ID")
+        key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        
+        if not key_id or not key_secret:
+            raise HTTPException(status_code=500, detail="Razorpay keys not configured on server.")
+
+        try:
+            client = razorpay.Client(auth=(key_id, key_secret))
+            
+            # 1. Verify Signature
+            params_dict = {
+                'razorpay_order_id': req.razorpay_order_id,
+                'razorpay_payment_id': req.razorpay_payment_id,
+                'razorpay_signature': req.razorpay_signature
+            }
+            client.utility.verify_payment_signature(params_dict)
+            
+            logger.info(f"Payment verified successfully for worker {req.worker_id}")
+            
+            # 2. Update Database if Supabase is available
+            if supabase:
+                # Log transaction
+                transaction_data = {
+                    "worker_id": str(req.worker_id),
+                    "razorpay_payment_id": req.razorpay_payment_id,
+                    "razorpay_order_id": req.razorpay_order_id,
+                    "amount": req.amount,
+                    "status": "success"
+                }
+                supabase.table("payment_transactions").insert(transaction_data).execute()
+                
+                # Update worker coverage status
+                # Assuming worker_id in DB is an integer or string matching req.worker_id
+                # Removing any 'DB' prefix if present from frontend mapping (e.g. DB4 -> 4)
+                numeric_worker_id = str(req.worker_id).replace("DB", "")
+                
+                supabase.table("gigshield_workers").update({"premium_paid": 1}).eq("worker_id", numeric_worker_id).execute()
+                logger.info(f"Database updated for worker {numeric_worker_id}")
+
+            return {
+                "status": "success",
+                "message": "Payment verified and record updated",
+                "payment_id": req.razorpay_payment_id
+            }
+        except Exception as e:
+            logger.error(f"Payment verification/update failed: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Payment verification failed: {str(e)}")
+
+    @application.get("/api/payment/history/{worker_id}", tags=["Payment"])
+    async def get_payment_history(worker_id: str):
+        """
+        Fetch successful payment transactions for a worker.
+        """
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database connection offline.")
+        
+        try:
+            # Handle both numeric and prefixed IDs
+            search_id = str(worker_id)
+            # We search for both '4' and 'DB4' to be safe
+            base_id = search_id.replace("DB", "")
+            prefixed_id = f"DB{base_id}"
+
+            res = supabase.table("payment_transactions") \
+                .select("*") \
+                .or_(f"worker_id.eq.{base_id},worker_id.eq.{prefixed_id}") \
+                .order("created_at", desc=True) \
+                .execute()
+            
+            return res.data
+        except Exception as e:
+            logger.error(f"Failed to fetch payment history: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     return application
 

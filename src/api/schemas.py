@@ -78,3 +78,11 @@ class RAGRetrieveRequest(BaseModel):
     query: str
     categories: Optional[List[str]] = None
     top_k: Optional[int] = None
+
+
+class PaymentVerifyRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+    worker_id: str
+    amount: float
